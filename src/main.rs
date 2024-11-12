@@ -65,12 +65,34 @@ fn patch(previous: &Version) -> Version {
     Version::new(previous.major, previous.minor, previous.patch + 1)
 }
 
-/// Increment the passed-in build or prerelease identifier.
-fn increment_identifier(identifier: &str) -> anyhow::Result<String> {
-    if let Some(idx) = identifier.rfind(SEPARATORS) {
+/// Increment the passed-in separator plus maybe-number.
+fn increment_identifier(suffix: &str) -> anyhow::Result<String> {
+    eprintln!("entering increment with {suffix}");
+    let mut characters = suffix.chars().peekable();
+
+    if let Some(maybe_sep) = characters.peek() {
+        eprintln!("we have a maybe_sep: {maybe_sep}");
+        if SEPARATORS.contains(maybe_sep) {
+            eprintln!("our maybe sep is a sep");
+            let separator = characters.next().expect("but we just checked this character");
+            let remainder: String = characters.collect();
+            let number = remainder.parse::<u64>()?;
+            eprintln!("{remainder} parsed as {number}");
+            return Ok(format!("{separator}{}", number + 1));
+        } else if maybe_sep.is_digit(10) {
+            let number = suffix.parse::<u64>()?;
+            // preserve lack of separator
+            return Ok(format!("{}", number + 1));
+        }
+    }
+    Ok(format!("{suffix}.1"))
+
+    /*
+
+    if let Some(idx) = suffix.rfind(SEPARATORS) {
         // This is the version that panics, but we're trusting the result we
         // just got from the rfind.
-        let split = identifier.split_at(idx);
+        let split = suffix.split_at(idx);
         let mut characters = split.1.chars(); // well, code points
         eprintln!("{idx} {} {}", split.0, split.1);
         let separator = characters.next().unwrap_or('.');
@@ -78,12 +100,13 @@ fn increment_identifier(identifier: &str) -> anyhow::Result<String> {
         let buildnum = possible_number.parse::<u64>()?;
         let next = format!("{}{separator}{}", split.0, buildnum + 1);
         Ok(next)
-    } else if let Ok(buildnum) = identifier.parse::<u64>() {
+    } else if let Ok(buildnum) = suffix.parse::<u64>() {
         // Try treating the whole thing as a number.
         Ok(format!("{}", buildnum + 1))
     } else {
-        Ok(format!("{identifier}.1"))
+        Ok(format!("{suffix}.1"))
     }
+    */
 }
 
 /// Update the prerelease identifier for this version number.
@@ -93,13 +116,39 @@ fn increment_identifier(identifier: &str) -> anyhow::Result<String> {
 /// If we have no existing identifier and no tag, we report an input error to the user.
 fn prerelease(previous: &Version, tag: &str) -> anyhow::Result<Version> {
     let mut next = Version::new(previous.major, previous.minor, previous.patch);
-    if (tag.is_empty() && !previous.pre.is_empty()) || (!tag.is_empty() && previous.pre.starts_with(tag)) {
-        let incremented = increment_identifier(previous.pre.as_str())?;
-        next.pre = Prerelease::from_str(incremented.as_str())?;
+    if tag.is_empty() && !previous.pre.is_empty() {
+        if let Some(idx) = previous.pre.rfind(SEPARATORS) {
+            let split = previous.pre.split_at(idx);
+            let incremented = increment_identifier(split.1)?;
+            let full = format!("{}{incremented}", split.0);
+            next.pre = Prerelease::from_str(full.as_str())?;
+            Ok(next)
+        } else {
+            match increment_identifier(previous.pre.to_string().as_str()) {
+                Ok(v) => {
+                    next.pre = Prerelease::from_str(v.as_str())?;
+                    Ok(next)
+                }
+                Err(_) => {
+                    let pretag = format!("{}.1", previous.build);
+                    next.pre = Prerelease::from_str(pretag.as_str())?;
+                    Ok(next)
+                }
+            }
+        }
+    } else if !tag.is_empty() && previous.pre.starts_with(tag) {
+        let remainder = previous.pre.to_string().replace(tag, "");
+        let incremented = increment_identifier(remainder.as_str())?;
+        let full = format!("{tag}{incremented}");
+        next.pre = Prerelease::from_str(full.as_str())?;
         Ok(next)
     } else if !tag.is_empty() {
         let pretag = format!("{tag}.1");
         next.pre = Prerelease::from_str(pretag.as_str())?;
+        Ok(next)
+    } else if !previous.pre.is_empty() {
+        let incremented = increment_identifier(previous.pre.to_string().as_str())?;
+        next.pre = Prerelease::from_str(incremented.as_str())?;
         Ok(next)
     } else {
         Err(anyhow!(
@@ -108,17 +157,45 @@ fn prerelease(previous: &Version, tag: &str) -> anyhow::Result<Version> {
     }
 }
 
-// This works just like prerelease, only it operates on the build segment.
+/// This works just like prerelease, only it operates on the build segment.
 fn build(previous: &Version, tag: &str) -> anyhow::Result<Version> {
     let mut next = Version::new(previous.major, previous.minor, previous.patch);
     next.pre = previous.pre.clone();
-    if (tag.is_empty() && !previous.build.is_empty()) || (!tag.is_empty() && previous.build.starts_with(tag)) {
-        let incremented = increment_identifier(previous.build.as_str())?;
-        next.build = BuildMetadata::from_str(incremented.as_str())?;
+
+    eprintln!("incrementing {}", previous.build);
+
+    if tag.is_empty() && !previous.build.is_empty() {
+        if let Some(idx) = previous.build.rfind(SEPARATORS) {
+            let split = previous.build.split_at(idx);
+            let incremented = increment_identifier(split.1)?;
+            let full = format!("{}{incremented}", split.0);
+            next.build = BuildMetadata::from_str(full.as_str())?;
+            Ok(next)
+        } else {
+            match increment_identifier(previous.build.to_string().as_str()) {
+                Ok(v) => {
+                    next.build = BuildMetadata::from_str(v.as_str())?;
+                    Ok(next)
+                }
+                Err(_) => {
+                    let buildid = format!("{}.1", previous.build);
+                    next.build = BuildMetadata::from_str(buildid.as_str())?;
+                    Ok(next)
+                }
+            }
+        }
+    } else if !tag.is_empty() && previous.build.starts_with(tag) {
+        let remainder = previous.build.to_string().replace(tag, "");
+        let incremented = increment_identifier(remainder.as_str())?;
+        let full = format!("{tag}{incremented}");
+        next.build = BuildMetadata::from_str(full.as_str())?;
         Ok(next)
     } else if !tag.is_empty() {
-        let buildtag = format!("{tag}.1");
-        next.build = BuildMetadata::from_str(buildtag.as_str())?;
+        let buildid = format!("{tag}.1");
+        next.build = BuildMetadata::from_str(buildid.as_str())?;
+        Ok(next)
+    } else if !previous.build.is_empty() {
+        eprintln!("in the non-empty case");
         Ok(next)
     } else {
         Err(anyhow!(
@@ -234,6 +311,9 @@ mod tests {
             next.pre,
             Prerelease::new("beta.1").expect("test data must be valid semver")
         );
+        let input = Version::parse("1.0.0-1").expect("test data must be valid semver");
+        let next = prerelease(&input, "").expect("we expected the prerelease bump to work");
+        assert_eq!(next.pre, Prerelease::new("2").expect("test data must be valid semver"));
     }
 
     #[test]

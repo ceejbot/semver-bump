@@ -1,0 +1,44 @@
+name: "Tests"
+on:
+    push:
+        branches: ["latest"]
+        paths:
+            - src/**
+            - Cargo.toml
+            - Cargo.lock
+            - examples/**
+            - .github/workflows/test.yaml
+    pull_request:
+        branches: ["latest"]
+    workflow_dispatch:
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    test:
+        name: test
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cargo/registry
+                      ~/.cargo/git
+                      target
+                  key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-cargo-
+
+            - name: get cargo-nextest on path
+              run: |
+                  curl -sL https://get.nexte.st/latest/linux -o nextest.tgz
+                  tar xfz nextest.tgz
+                  mv cargo-nextest /home/runner/.cargo/bin
+
+            - name: run the tests
+              run: cargo nextest run
+
+            - name: consult Clippy
+              run: cargo clippy

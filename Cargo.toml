@@ -1,9 +1,22 @@
 [package]
 name = "semver-bump"
+description = "A command-line tool for bumping semver-compliant version numbers"
+repository = "https://github.com/ceejbot/semver-bump"
 version = "0.1.0"
 edition = "2021"
+authors = ["C J Silverio <ceejceej@gmail.com>"]
+license = "Parity-7.0.0"
+readme = "README.md"
+rust-version = "1.65.0"
+keywords = ["cli", "semver", "version", "version-bump"]
+categories = ["command-line-utilities", "development-tools::build-utils"]
 
 [dependencies]
 anyhow = "1.0.93"
 clap = { version = "4.5.20", features = ["derive", "wrap_help"] }
 semver = "1.0.23"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
