@@ -79,7 +79,7 @@ fn increment_identifier(suffix: &str) -> anyhow::Result<String> {
             let number = remainder.parse::<u64>()?;
             eprintln!("{remainder} parsed as {number}");
             return Ok(format!("{separator}{}", number + 1));
-        } else if maybe_sep.is_digit(10) {
+        } else if maybe_sep.is_ascii_digit() {
             let number = suffix.parse::<u64>()?;
             // preserve lack of separator
             return Ok(format!("{}", number + 1));
