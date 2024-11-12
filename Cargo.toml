@@ -2,6 +2,7 @@
 name = "semver-bump"
 description = "A command-line tool for bumping semver-compliant version numbers"
 repository = "https://github.com/ceejbot/semver-bump"
+homepage = "https://github.com/ceejbot/semver-bump"
 version = "0.1.0"
 edition = "2021"
 authors = ["C J Silverio <ceejceej@gmail.com>"]
