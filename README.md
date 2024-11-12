@@ -1,12 +1,12 @@
 # semver-bump
 
-[![Tests](https://github.com/ceejbot/semver-bump/actions/workflows/test.yaml/badge.svg)](https://github.com/ceejbot/semver-bump/actions/workflows/test.yaml)
+[![Tests](https://github.com/ceejbot/semver-bump/actions/workflows/test.yml/badge.svg)](https://github.com/ceejbot/semver-bump/actions/workflows/test.yml)
 
 A tool for bumping version numbers in a semantic-version-compatible way, designed to be used in a shell scripting context. It takes the previous version number as input from `stdin`, bumps the segment you requested to be bumped, and emits the result to `stdout` with no other noise. It also handles bumping pre-release and build identifiers as well, so you can increment `3.0.0-alpha.1` to `3.0.0-alpha.2`.
 
 ## Usage
 
-There are four commands. The `prerelease` and `build` commands take an optional replacement identifier string parameter.
+There are five commands. The `prerelease` and `build` commands take an optional replacement identifier string parameter.
 
 ```text
 > semver-bump help

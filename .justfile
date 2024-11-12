@@ -19,7 +19,11 @@ setup:
 tag-release +V="patch":
 	#!/usr/bin/env bash
 	set -e
-	version=$($(tomato get package.version Cargo.toml) | cargo run -- {{V}})
+	if [[ ! -z $(git status --untracked-files=no --porcelain) ]]; then
+		echo "Git working directory has uncommitted changes! Exiting."
+		exit 1
+	fi
+	version=$(echo $(tomato get package.version Cargo.toml) | cargo run -- {{V}})
 	tomato set package.version "$version" Cargo.toml
 	cargo check
 	git commit Cargo.toml Cargo.lock -m "v$version"
