@@ -1,6 +1,8 @@
 # semver-bump
 
-A tool for bumping version numbers in a semantic-version-compatible way, designed to be used in a shell scripting context. It takes the previous version number as input from `stdin`, bumps the segment you requested to be bumped, and emits the result to `stdout` with no other noise. It also handles bumping pre-release aka build identifiers as well, so you can increment `3.0.0-alpha.1` to `3.0.0-alpha.2`.
+[![Tests](https://github.com/ceejbot/semver-bump/actions/workflows/test.yaml/badge.svg)](https://github.com/ceejbot/semver-bump/actions/workflows/test.yaml)
+
+A tool for bumping version numbers in a semantic-version-compatible way, designed to be used in a shell scripting context. It takes the previous version number as input from `stdin`, bumps the segment you requested to be bumped, and emits the result to `stdout` with no other noise. It also handles bumping pre-release and build identifiers as well, so you can increment `3.0.0-alpha.1` to `3.0.0-alpha.2`.
 
 ## Usage
 
@@ -9,7 +11,8 @@ There are four commands. The `prerelease` and `build` commands take an optional 
 ```text
 > semver-bump help
 
-Read a semver-compliant version number from stdin and bump the number as requested, writing the result to stdout
+Read a semver-compliant version number from stdin and bump the
+number as requested, writing the result to stdout
 
 Usage: semver-bump <COMMAND>
 
@@ -66,7 +69,7 @@ Error: The current version does not have a prerelease suffix and you did not pro
 Error: unexpected character in pre-release identifier
 ```
 
-Bumping the build metadata component is an edge use case, but this tool supports doing so in case somebody needs it.
+Bumping the build metadata component is an edge use case, but this tool supports doing so if somebody needs it.
 
 ```shell
 > echo 1.0.3-rc.2+build-4 | semver-bump build
