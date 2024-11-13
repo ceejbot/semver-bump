@@ -8,7 +8,7 @@ edition = "2021"
 authors = ["C J Silverio <ceejceej@gmail.com>"]
 license = "Parity-7.0.0"
 readme = "README.md"
-rust-version = "1.65.0"
+rust-version = "1.74.1"
 keywords = ["cli", "semver", "version", "version-bump"]
 categories = ["command-line-utilities", "development-tools::build-utils"]
 
