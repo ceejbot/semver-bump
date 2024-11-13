@@ -1,4 +1,4 @@
-# semver-bump
+# semver-bump 🤜🤛
 
 [![Tests](https://github.com/ceejbot/semver-bump/actions/workflows/test.yml/badge.svg)](https://github.com/ceejbot/semver-bump/actions/workflows/test.yml)
 

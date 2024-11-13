@@ -24,7 +24,7 @@ tag-release +V="patch":
 		exit 1
 	fi
 	version=$(echo $(tomato get package.version Cargo.toml) | cargo run -- {{V}})
-	tomato set package.version "$version" Cargo.toml
+	tomato set package.version "$version" Cargo.toml &> /dev/null
 	cargo check
 	git commit Cargo.toml Cargo.lock -m "v$version"
 	git tag "$version"
