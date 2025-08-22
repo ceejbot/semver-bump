@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/ceejbot/semver-bump/actions/workflows/test.yml/badge.svg)](https://github.com/ceejbot/semver-bump/actions/workflows/test.yml)
 
-A tool for bumping version numbers in a semantic-version-compatible way, designed to be used in a shell scripting context. It takes the previous version number as input from `stdin`, bumps the segment you requested to be bumped, and emits the result to `stdout` with no other noise. It also handles bumping pre-release and build identifiers as well, so you can increment `3.0.0-alpha.1` to `3.0.0-alpha.2`.
+A tool for bumping version numbers in a semantic-version-compatible way, designed to be used in a shell scripting context. It takes the previous version number as a command-line argument, bumps the segment you requested to be bumped, and emits the result to `stdout` with no other noise. It also handles bumping pre-release and build identifiers as well, so you can increment `3.0.0-alpha.1` to `3.0.0-alpha.2`.
 
 `semver-bump` may be installed pre-built from the [latest release](https://github.com/ceejbot/semver-bump/releases/latest) on GitHub, or with homebrew via `brew install ceejbot/tap/semver-bump`. You may also build it yourself with `cargo install semver-bump`. It requires at least Rust 1.74.1 to build.
 
@@ -13,8 +13,7 @@ There are five commands. The `prerelease` and `build` commands take an optional 
 ```text
 > semver-bump help
 
-Read a semver-compliant version number from stdin and bump the
-number as requested, writing the result to stdout
+Bump a semver-compliant version number and write the result to stdout
 
 Usage: semver-bump <COMMAND>
 
@@ -39,7 +38,7 @@ Here we bump the version number of semver-bump itself:
 #!/usr/bin/env bash
 set -e
 old=$(tomato get package.version Cargo.toml)
-version=$(echo "$old" | cargo run -- "$1")
+version=$(cargo run -- "$1" "$old")
 tomato set package.version "$version" Cargo.toml
 cargo check
 git commit Cargo.toml Cargo.lock -m "v$version"
@@ -52,29 +51,29 @@ A nearly identical version of this is in the justfile for this repo. You can use
 Here are some examples of the prerelease bumping behavior. There are some restrictions on what characters are allowed in the semver prerelease identifiers, and the semver crate's implementation is stricter than some.
 
 ```shell
-> echo 1.2.3-alpha.4 | semver-bump prerelease
+> semver-bump prerelease 1.2.3-alpha.4
 1.2.3-alpha.5
 
-> echo 1.2.3-cetialpha4 | semver-bump prerelease
+> semver-bump prerelease 1.2.3-cetialpha4
 1.2.3-cetialpha5
 
-> echo 1.2.3-ceti-alpha-4 | semver-bump prerelease
+> semver-bump prerelease 1.2.3-ceti-alpha-4
 1.2.3-ceti-alpha-5
 
-> echo 1.2.3-ceti-alpha-5 | semver-bump prerelease beta
-1.2.3-beta-1
+> semver-bump prerelease 1.2.3-ceti-alpha-5 beta
+1.2.3-beta.1
 
-> echo 1.0.0 | semver-bump prerelease
+> semver-bump prerelease 1.0.0
 Error: The current version does not have a prerelease suffix and you did not provide one.
 
-> echo 1.0.0 | semver-bump prerelease +illegal+
+> semver-bump prerelease 1.0.0 +illegal+
 Error: unexpected character in pre-release identifier
 ```
 
 Bumping the build metadata component is an edge use case, but this tool supports doing so if somebody needs it.
 
 ```shell
-> echo 1.0.3-rc.2+build-4 | semver-bump build
+> semver-bump build 1.0.3-rc.2+build-4
 1.0.3-rc.2+build-5
 ```
 

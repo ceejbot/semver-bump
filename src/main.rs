@@ -12,6 +12,8 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 use anyhow::anyhow;
+use clap::builder::Styles;
+use clap::builder::styling::AnsiColor;
 use clap::{Parser, Subcommand};
 use semver::{BuildMetadata, Prerelease, Version};
 
@@ -20,9 +22,8 @@ use semver::{BuildMetadata, Prerelease, Version};
 const SEPARATORS: [char; 2] = ['.', '-'];
 
 #[derive(Parser, Debug)]
-#[clap(name = "semver-bump", version)]
-/// Read a semver-compliant version number from stdin and bump the number as requested,
-/// writing the result to stdout.
+#[clap(name = "semver-bump", version, styles = v3_styles(), max_term_width = 100)]
+/// Bump a semver-compliant version number and write the result to stdout.
 pub struct Args {
     #[clap(subcommand)]
     cmd: Command,
@@ -31,27 +32,49 @@ pub struct Args {
 #[derive(Clone, Debug, Subcommand)]
 pub enum Command {
     /// Bump the major version number for a breaking change.
-    Major,
+    Major {
+        /// The version to bump.
+        version: String,
+    },
     /// Bump the minor version number for a new feature.
-    Minor,
+    Minor {
+        /// The version to bump.
+        version: String,
+    },
     /// Bump the patch version number for a bug fix.
-    Patch,
+    Patch {
+        /// The version to bump.
+        version: String,
+    },
     #[command(about = "Bump any version number at the end of a pre-release identifier", long_about)]
     /// This command handles incrementing prerelease identifiers of the form
     /// `<id><sep><#>`. If no pre-release identifier is present in the input, one
     /// is added with count 1. The command defaults to `.` as a separator, but respects
     /// `.` and `-` as valid separators.
     Prerelease {
-        /// The pre-release identifier to use; optional if you're re-using the existing identifier.
+        /// The version to bump.
+        version: String,
+        /// The optional pre-release identifier to use.
         /// Must contain only alphanumeric characters plus any of the valid separator characters.
         identifier: Option<String>,
     },
     /// Bump any version number at the end of a build identifier.
     Build {
-        // An optional build identifier to use if you want to add one to a version,
-        // or to replace an existing build identifier. Behaves like bumping a prerelease.
+        /// The version to bump.
+        version: String,
+        /// The optional build identifier to use.
+        /// Must contain only alphanumeric characters plus any of the valid separator characters.
         identifier: Option<String>,
     },
+}
+
+/// I like my clap help styled the old way.
+fn v3_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
 }
 
 /// Increment the major version.
@@ -177,21 +200,23 @@ fn build(previous: &Version, tag: &str) -> anyhow::Result<Version> {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    let mut buffer = String::new();
-    let stdin = std::io::stdin();
-    stdin.read_line(&mut buffer)?;
-    let trimmed = buffer.trim();
-    let previous = Version::parse(trimmed)?;
+    let previous = match &args.cmd {
+        Command::Major { version }
+        | Command::Minor { version }
+        | Command::Patch { version }
+        | Command::Prerelease { version, .. }
+        | Command::Build { version, .. } => Version::parse(version)?,
+    };
 
     let result = match args.cmd {
-        Command::Major => major(&previous),
-        Command::Minor => minor(&previous),
-        Command::Patch => patch(&previous),
-        Command::Prerelease { identifier } => {
+        Command::Major { .. } => major(&previous),
+        Command::Minor { .. } => minor(&previous),
+        Command::Patch { .. } => patch(&previous),
+        Command::Prerelease { identifier, .. } => {
             let tag = identifier.unwrap_or_default();
             prerelease(&previous, tag.as_str())?
         }
-        Command::Build { identifier } => {
+        Command::Build { identifier, .. } => {
             let tag = identifier.unwrap_or_default();
             build(&previous, tag.as_str())?
         }

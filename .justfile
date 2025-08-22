@@ -9,6 +9,10 @@ test:
 fmt:
 	cargo +nightly fmt
 
+# Clippy is our friend
+lint: fmt
+	cargo clippy --all-targets
+
 # Install required tools
 setup:
 	brew tap ceejbot/tap
@@ -23,7 +27,8 @@ tag-release +V="patch":
 		echo "Git working directory has uncommitted changes! Exiting."
 		exit 1
 	fi
-	version=$(echo $(tomato get package.version Cargo.toml) | cargo run -- {{V}})
+	old=$(tomato get package.version Cargo.toml)
+	version=$(cargo run -- {{V}} "$old")
 	tomato set package.version "$version" Cargo.toml &> /dev/null
 	cargo check
 	git commit Cargo.toml Cargo.lock -m "v$version"

@@ -3,12 +3,12 @@ name = "semver-bump"
 description = "A command-line tool for bumping semver-compliant version numbers"
 repository = "https://github.com/ceejbot/semver-bump"
 homepage = "https://github.com/ceejbot/semver-bump"
-version = "1.0.1"
-edition = "2021"
+version = "2.0.0"
+edition = "2024"
 authors = ["C J Silverio <ceejceej@gmail.com>"]
 license = "Parity-7.0.0"
 readme = "README.md"
-rust-version = "1.74.1"
+rust-version = "1.85.1"
 keywords = ["cli", "semver", "version", "version-bump"]
 categories = ["command-line-utilities", "development-tools::build-utils"]
 
@@ -17,7 +17,18 @@ anyhow = "1.0.93"
 clap = { version = "4.5.20", features = ["derive", "wrap_help"] }
 semver = "1.0.23"
 
-# The profile that 'dist' will build with
-[profile.dist]
-inherits = "release"
-lto = "thin"
+[lints.rust]
+unsafe_code = { level = "deny", priority = 1 }
+future_incompatible = { level = "deny", priority = 2 }
+trivial_casts = { level = "warn", priority = 3 }
+rust_2018_idioms = { level = "warn", priority = 4 }
+
+[lints.clippy]
+unwrap_used = "deny"
+
+[profile.release]
+lto = true        # Enable full link-time optimization
+codegen-units = 1 # Single codegen unit for better optimization
+opt-level = 3     # Maximum optimization
+strip = true      # Strip symbols for smaller binary
+panic = "abort"   # Smaller binary, no unwinding
