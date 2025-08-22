@@ -122,12 +122,19 @@ fn increment_identifier(suffix: &str) -> anyhow::Result<String> {
         if SEPARATORS.contains(maybe_sep) {
             let separator = characters.next().expect("but we just checked this character!");
             let remainder: String = characters.collect();
-            let number = remainder.parse::<u64>()?;
-            return Ok(format!("{separator}{}", number + 1));
+            // Check if remainder is numeric before parsing
+            if let Ok(number) = remainder.parse::<u64>() {
+                return Ok(format!("{separator}{}", number + 1));
+            } else {
+                // Non-numeric after separator, append .1
+                return Ok(format!("{suffix}.1"));
+            }
         } else if maybe_sep.is_ascii_digit() {
-            let number = suffix.parse::<u64>()?;
-            // preserve lack of separator
-            return Ok(format!("{}", number + 1));
+            // Check if entire suffix is numeric
+            if let Ok(number) = suffix.parse::<u64>() {
+                // preserve lack of separator
+                return Ok(format!("{}", number + 1));
+            }
         }
     }
     Ok(format!("{suffix}.1"))
@@ -154,17 +161,19 @@ fn increment<T: Incrementable>(input: &T, tag: &str) -> anyhow::Result<Box<T>> {
                 }
             }
         }
+    } else if !tag.is_empty() && previous.starts_with(tag) {
+        // If the previous starts with tag, increment the suffix
+        let remainder = previous.to_string().replace(tag, "");
+        let incremented = increment_identifier(remainder.as_str())?;
+        format!("{tag}{incremented}")
     } else if !tag.is_empty() && tag != previous {
+        // New tag, start at .1 if not already numbered
         let last = tag.chars().last().unwrap_or_default();
         if last.is_ascii_digit() {
             tag.to_owned()
         } else {
             format!("{tag}.1")
         }
-    } else if !tag.is_empty() && previous.starts_with(tag) {
-        let remainder = previous.to_string().replace(tag, "");
-        let incremented = increment_identifier(remainder.as_str())?;
-        format!("{tag}{incremented}")
     } else if !tag.is_empty() {
         format!("{tag}.1")
     } else if !previous.is_empty() {
@@ -185,6 +194,7 @@ fn prerelease(previous: &Version, tag: &str) -> anyhow::Result<Version> {
     let mut next = Version::new(previous.major, previous.minor, previous.patch);
     let identifier = increment(&previous.pre, tag)?;
     next.pre = *identifier;
+    next.build = previous.build.clone(); // Preserve build metadata
     Ok(next)
 }
 
@@ -316,8 +326,10 @@ mod tests {
         let input = Version::parse("1.0.0").expect("test data must be valid semver");
         prerelease(&input, "").expect_err("we expected an error from this call");
         prerelease(&input, "+illegal+").expect_err("we expected an error from this call");
+        // Non-numeric suffixes are now handled gracefully by appending .1
         let input = Version::parse("1.0.0-alpha.four").expect("test data must be valid semver");
-        prerelease(&input, "").expect_err("we expected an error from this call");
+        let next = prerelease(&input, "").expect("should handle non-numeric gracefully");
+        assert_eq!(next.to_string(), "1.0.0-alpha.four.1");
     }
 
     #[test]
@@ -349,9 +361,114 @@ mod tests {
     fn passing_numbers_in() {
         let input = Version::parse("1.2.3-four+4").expect("test data must be valid semver");
         let next = prerelease(&input, "beta.2").expect("we expected prerelease() to work");
-        assert_eq!(next.to_string(), "1.2.3-beta.2");
+        // When replacing prerelease, build metadata is preserved
+        assert_eq!(next.to_string(), "1.2.3-beta.2+4");
         let input = Version::parse("1.2.3-four+4").expect("test data must be valid semver");
         let next = build(&input, "7").expect("we expected build() to work");
         assert_eq!(next.to_string(), "1.2.3-four+7");
+    }
+
+    #[test]
+    fn semver_spec_compliance() {
+        // Test that major/minor/patch bumps remove prerelease and build metadata
+        let input = Version::parse("1.2.3-alpha.1+build.123").expect("valid semver");
+        let major_bump = major(&input);
+        assert_eq!(major_bump.to_string(), "2.0.0");
+        assert!(major_bump.pre.is_empty());
+        assert!(major_bump.build.is_empty());
+
+        let minor_bump = minor(&input);
+        assert_eq!(minor_bump.to_string(), "1.3.0");
+        assert!(minor_bump.pre.is_empty());
+        assert!(minor_bump.build.is_empty());
+
+        let patch_bump = patch(&input);
+        assert_eq!(patch_bump.to_string(), "1.2.4");
+        assert!(patch_bump.pre.is_empty());
+        assert!(patch_bump.build.is_empty());
+    }
+
+    #[test]
+    fn prerelease_with_non_numeric_suffix() {
+        // When prerelease ends with non-numeric, we should append .1
+        let input = Version::parse("1.0.0-alpha.beta").expect("valid semver");
+        let next = prerelease(&input, "").expect("should handle non-numeric suffix");
+        assert_eq!(next.to_string(), "1.0.0-alpha.beta.1");
+
+        // Complex prerelease with multiple dots
+        let input = Version::parse("2.0.0-rc.1.alpha").expect("valid semver");
+        let next = prerelease(&input, "").expect("should handle complex prerelease");
+        assert_eq!(next.to_string(), "2.0.0-rc.1.alpha.1");
+    }
+
+    #[test]
+    fn numeric_prerelease_handling() {
+        // Pure numeric prerelease
+        let input = Version::parse("1.0.0-0").expect("valid semver");
+        let next = prerelease(&input, "").expect("should increment numeric");
+        assert_eq!(next.to_string(), "1.0.0-1");
+
+        // Numeric after identifier
+        let input = Version::parse("1.0.0-alpha.0").expect("valid semver");
+        let next = prerelease(&input, "").expect("should increment");
+        assert_eq!(next.to_string(), "1.0.0-alpha.1");
+    }
+
+    #[test]
+    fn zero_version_handling() {
+        // 0.x.y versions should work normally
+        let input = Version::parse("0.1.0").expect("valid semver");
+        let minor_bump = minor(&input);
+        assert_eq!(minor_bump.to_string(), "0.2.0");
+
+        let input = Version::parse("0.0.1").expect("valid semver");
+        let patch_bump = patch(&input);
+        assert_eq!(patch_bump.to_string(), "0.0.2");
+
+        // Major bump from 0.x.y should go to 1.0.0
+        let input = Version::parse("0.5.3").expect("valid semver");
+        let major_bump = major(&input);
+        assert_eq!(major_bump.to_string(), "1.0.0");
+    }
+
+    #[test]
+    fn build_metadata_preservation() {
+        // Build metadata should be preserved when bumping prerelease
+        let input = Version::parse("1.0.0-alpha+build.123").expect("valid semver");
+        let next = prerelease(&input, "").expect("should preserve build");
+        assert_eq!(next.to_string(), "1.0.0-alpha.1+build.123");
+
+        // Build metadata should be updated when using build command
+        let next = build(&input, "").expect("should update build");
+        assert_eq!(next.to_string(), "1.0.0-alpha+build.124");
+    }
+
+    #[test]
+    fn identifier_replacement() {
+        // Replacing one prerelease identifier with another
+        let input = Version::parse("1.0.0-alpha.5").expect("valid semver");
+        let next = prerelease(&input, "beta").expect("should replace identifier");
+        assert_eq!(next.to_string(), "1.0.0-beta.1");
+
+        // Replacing with same identifier should increment
+        let next = prerelease(&input, "alpha").expect("should increment same identifier");
+        assert_eq!(next.to_string(), "1.0.0-alpha.6");
+    }
+
+    #[test]
+    fn edge_case_separators() {
+        // Testing both . and - as separators
+        let input = Version::parse("1.0.0-rc-1").expect("valid semver with dash separator");
+        let next = prerelease(&input, "").expect("should handle dash separator");
+        assert_eq!(next.to_string(), "1.0.0-rc-2");
+
+        let input = Version::parse("1.0.0-rc.1").expect("valid semver with dot separator");
+        let next = prerelease(&input, "").expect("should handle dot separator");
+        assert_eq!(next.to_string(), "1.0.0-rc.2");
+
+        // Mixed separators in identifier
+        let input = Version::parse("1.0.0-alpha-beta.1").expect("valid semver");
+        let next = prerelease(&input, "").expect("should handle mixed separators");
+        assert_eq!(next.to_string(), "1.0.0-alpha-beta.2");
     }
 }
