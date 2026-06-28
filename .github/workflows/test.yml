@@ -36,7 +36,7 @@ jobs:
               uses: actions-rust-lang/setup-rust-toolchain@46268bd060767258de96ed93c1251119784f2ab6
               with:
                   toolchain: stable, nightly
-                  components: rustfmt
+                  components: rustfmt, clippy
                   cache-directories: |
                       ~/.cargo/registry
                       ~/.cargo/bin
@@ -58,4 +58,4 @@ jobs:
               run: cargo nextest run --all-targets --all-features --future-incompat-report
 
             - name: consult Clippy
-              run: cargo clippy --all-targets --all-features
+              run: cargo +stable clippy --all-targets --all-features
