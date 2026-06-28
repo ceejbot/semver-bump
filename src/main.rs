@@ -5,9 +5,6 @@
 //! It handles incrementing or replacing pre-release and build identifiers as well
 //! as the usual major.minor.patch numbers.
 
-#![deny(future_incompatible, clippy::unwrap_used)]
-#![warn(rust_2018_idioms, trivial_casts)]
-
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -92,25 +89,19 @@ fn patch(previous: &Version) -> Version {
     Version::new(previous.major, previous.minor, previous.patch + 1)
 }
 
-trait Incrementable: Display {
-    fn create_new(input: String) -> anyhow::Result<Box<Self>>;
+trait Incrementable: Display + Sized {
+    fn create_new(input: String) -> anyhow::Result<Self>;
 }
 
 impl Incrementable for Prerelease {
-    fn create_new(input: String) -> anyhow::Result<Box<Prerelease>> {
-        match Prerelease::from_str(input.as_str()) {
-            Ok(v) => Ok(Box::new(v)),
-            Err(e) => Err(anyhow::Error::from(e)),
-        }
+    fn create_new(input: String) -> anyhow::Result<Self> {
+        Ok(Prerelease::from_str(&input)?)
     }
 }
 
 impl Incrementable for BuildMetadata {
-    fn create_new(input: String) -> anyhow::Result<Box<BuildMetadata>> {
-        match BuildMetadata::from_str(input.as_str()) {
-            Ok(v) => Ok(Box::new(v)),
-            Err(e) => Err(anyhow::Error::from(e)),
-        }
+    fn create_new(input: String) -> anyhow::Result<Self> {
+        Ok(BuildMetadata::from_str(&input)?)
     }
 }
 
@@ -140,52 +131,40 @@ fn increment_identifier(suffix: &str) -> anyhow::Result<String> {
     Ok(format!("{suffix}.1"))
 }
 
-/// Update the identifier for this version number.
-/// If we don't have an existing identifier, we add one.
-/// If we have an existing identifier that matches a passed-in tag, we increment.
-/// If we have an existing identifier and no passed-in tag, we increment existing.
-/// If we have no existing identifier and no tag, we report an input error to the user.
-fn increment<T: Incrementable>(input: &T, tag: &str) -> anyhow::Result<Box<T>> {
+/// Update the identifier for this version number. There are three cases plus an error:
+/// - No tag given but one already exists: increment the number at the end of the existing one.
+/// - A tag is given that the existing identifier already uses: increment its trailing number.
+/// - A brand-new tag is given: use it as-is if it ends in a digit, otherwise start it at `.1`.
+/// - No tag given and none exists: report an input error to the user.
+fn increment<T: Incrementable>(input: &T, tag: &str) -> anyhow::Result<T> {
     let previous = input.to_string();
 
-    let identifier = if tag.is_empty() && !previous.is_empty() {
-        if let Some(idx) = previous.rfind(SEPARATORS) {
-            let split = previous.split_at(idx);
-            let incremented = increment_identifier(split.1)?;
-            format!("{}{incremented}", split.0)
-        } else {
-            match increment_identifier(previous.to_string().as_str()) {
-                Ok(v) => v,
-                Err(_) => {
-                    format!("{}.1", previous)
-                }
-            }
+    let identifier = if tag.is_empty() {
+        if previous.is_empty() {
+            return Err(anyhow!(
+                "The current version does not have a prerelease suffix and you did not provide one."
+            ));
         }
-    } else if !tag.is_empty() && previous.starts_with(tag) {
-        // If the previous starts with tag, increment the suffix
-        let remainder = previous.to_string().replace(tag, "");
-        let incremented = increment_identifier(remainder.as_str())?;
-        format!("{tag}{incremented}")
-    } else if !tag.is_empty() && tag != previous {
-        // New tag, start at .1 if not already numbered
-        let last = tag.chars().last().unwrap_or_default();
-        if last.is_ascii_digit() {
+        // No tag given: increment the number at the end of the existing identifier.
+        if let Some(idx) = previous.rfind(SEPARATORS) {
+            let (head, suffix) = previous.split_at(idx);
+            format!("{head}{}", increment_identifier(suffix)?)
+        } else {
+            increment_identifier(&previous)?
+        }
+    } else if let Some(remainder) = previous.strip_prefix(tag) {
+        // Existing identifier already uses this tag: increment its trailing number.
+        format!("{tag}{}", increment_identifier(remainder)?)
+    } else {
+        // Brand-new tag: keep as-is if it already ends in a digit, else start at .1.
+        if tag.chars().last().unwrap_or_default().is_ascii_digit() {
             tag.to_owned()
         } else {
             format!("{tag}.1")
         }
-    } else if !tag.is_empty() {
-        format!("{tag}.1")
-    } else if !previous.is_empty() {
-        increment_identifier(previous.to_string().as_str())?
-    } else {
-        return Err(anyhow!(
-            "The current version does not have a prerelease suffix and you did not provide one."
-        ));
     };
 
-    let next = T::create_new(identifier)?;
-    Ok(next)
+    T::create_new(identifier)
 }
 
 /// Replace or add a prerelease identifier, or increment the number at the
@@ -193,7 +172,7 @@ fn increment<T: Incrementable>(input: &T, tag: &str) -> anyhow::Result<Box<T>> {
 fn prerelease(previous: &Version, tag: &str) -> anyhow::Result<Version> {
     let mut next = Version::new(previous.major, previous.minor, previous.patch);
     let identifier = increment(&previous.pre, tag)?;
-    next.pre = *identifier;
+    next.pre = identifier;
     next.build = previous.build.clone(); // Preserve build metadata
     Ok(next)
 }
@@ -203,7 +182,7 @@ fn build(previous: &Version, tag: &str) -> anyhow::Result<Version> {
     let mut next = Version::new(previous.major, previous.minor, previous.patch);
     next.pre = previous.pre.clone();
     let identifier = increment(&previous.build, tag)?;
-    next.build = *identifier;
+    next.build = identifier;
     Ok(next)
 }
 

@@ -4,7 +4,7 @@
 
 A tool for bumping version numbers in a semantic-version-compatible way, designed to be used in a shell scripting context. It takes the previous version number as a command-line argument, bumps the segment you requested to be bumped, and emits the result to `stdout` with no other noise. It also handles bumping pre-release and build identifiers as well, so you can increment `3.0.0-alpha.1` to `3.0.0-alpha.2`.
 
-`semver-bump` may be installed pre-built from the [latest release](https://github.com/ceejbot/semver-bump/releases/latest) on GitHub, or with homebrew via `brew install ceejbot/tap/semver-bump`. You may also build it yourself with `cargo install semver-bump`. It requires at least Rust 1.74.1 to build.
+`semver-bump` may be installed pre-built from the [latest release](https://github.com/ceejbot/semver-bump/releases/latest) on GitHub, or with homebrew via `brew install ceejbot/tap/semver-bump`. You may also build it yourself with `cargo install semver-bump`. It requires at least Rust 1.85 to build, because it uses the 2024 edition.
 
 ## Usage
 

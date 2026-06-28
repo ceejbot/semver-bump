@@ -32,5 +32,5 @@ tag-release +V="patch":
 	tomato set package.version "$version" Cargo.toml &> /dev/null
 	cargo check
 	git commit Cargo.toml Cargo.lock -m "v$version"
-	git tag "$version"
+	git tag "v$version"
 	echo "Release tagged for version $version"

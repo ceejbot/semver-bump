@@ -5,6 +5,7 @@ repository = "https://github.com/ceejbot/semver-bump"
 homepage = "https://github.com/ceejbot/semver-bump"
 version = "2.0.0"
 edition = "2024"
+rust-version = "1.85"
 authors = ["C J Silverio <ceejceej@gmail.com>"]
 license = "Parity-7.0.0"
 readme = "README.md"
@@ -15,6 +16,10 @@ categories = ["command-line-utilities", "development-tools::build-utils"]
 anyhow = "1.0.93"
 clap = { version = "4.5.20", features = ["derive", "wrap_help"] }
 semver = "1.0.23"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
 
 [lints.rust]
 unsafe_code = { level = "deny", priority = 1 }
