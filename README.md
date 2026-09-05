@@ -32,7 +32,7 @@ Options:
 
 ## Examples
 
-Here we bump the version number of semver-bump itself:
+Here we bump the version number of semver-bump itself. The script reads and writes `Cargo.toml` with [tomato](https://github.com/ceejbot/tomato), a TOML editing tool:
 
 ```shell
 #!/usr/bin/env bash
@@ -42,11 +42,11 @@ version=$(cargo run -- "$1" "$old")
 tomato set package.version "$version" Cargo.toml
 cargo check
 git commit Cargo.toml Cargo.lock -m "v$version"
-git tag "$version"
+git tag "v$version"
 echo "Release tagged for version $version"
 ```
 
-A nearly identical version of this is in the justfile for this repo. You can use [cargo-edit](https://github.com/killercup/cargo-edit?tab=readme-ov-file#cargo-set-version) for this specific use case if you don't need to manage pre-release or build identifiers. The use case I had in mind was automatic version bumping and tagging for a project in a language other than Rust.
+The `v` prefix on the tag matters: the release workflow in this repo only fires on tags that carry it. The `version` recipe in the justfile does exactly this. You can use [cargo-edit](https://github.com/killercup/cargo-edit?tab=readme-ov-file#cargo-set-version) for this specific use case if you don't need to manage pre-release or build identifiers. The use case I had in mind was automatic version bumping and tagging for a project in a language other than Rust.
 
 Here are some examples of the prerelease bumping behavior. There are some restrictions on what characters are allowed in the semver prerelease identifiers, and the semver crate's implementation is stricter than some.
 
@@ -76,6 +76,10 @@ Bumping the build metadata component is an edge use case, but this tool supports
 > semver-bump build 1.0.3-rc.2+build-4
 1.0.3-rc.2+build-5
 ```
+
+## Development
+
+The justfile holds the everyday recipes. `just test` runs the tests with nextest, `just lint` runs clippy with warnings denied, and `just ci` runs both plus the nightly rustfmt check, which is the same set of checks the CI workflow runs. `just version patch` bumps the crate version, commits, and tags a release. `just setup` installs the tools these recipes need.
 
 ## LICENSE
 

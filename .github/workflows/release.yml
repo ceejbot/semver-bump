@@ -37,6 +37,10 @@ concurrency:
 env:
     CARGO_TERM_COLOR: always
     BINARY_NAME: semver-bump # <-- the only per-crate change
+    # formulaic generates the Homebrew formula. Pinned by version and checksum
+    # because this job holds a write token for the tap repo.
+    FORMULAIC_VERSION: v0.8.1
+    FORMULAIC_SHA256: 0c2db7d20e09f3448876cdce6d6d4942ce48c841d355ecb4c6a113c2c602d09a
 
 defaults:
     run:
@@ -98,7 +102,7 @@ jobs:
         runs-on: ${{ matrix.runner }}
         steps:
             - name: checkout
-              uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 
@@ -141,7 +145,7 @@ jobs:
             contents: write
         steps:
             - name: checkout
-              uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 
@@ -159,11 +163,12 @@ jobs:
                   HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
                   REF_NAME: ${{ needs.preflight.outputs.ref_name }}
               run: |
-                  # Fetch formulaic and locate its binary regardless of the
-                  # tarball's internal layout (that layout has changed before and
-                  # silently broke this step).
+                  # Fetch the pinned formulaic release and verify it before running it.
                   curl -sSfL -o formulaic.tgz \
-                      https://github.com/ceejbot/formulaic/releases/latest/download/formulaic-x86_64-unknown-linux-gnu.tar.gz
+                      "https://github.com/ceejbot/formulaic/releases/download/$FORMULAIC_VERSION/formulaic-x86_64-unknown-linux-gnu.tar.gz"
+                  echo "$FORMULAIC_SHA256  formulaic.tgz" | sha256sum --check --strict
+                  # Locate the binary regardless of the tarball's internal layout
+                  # (that layout has changed before and silently broke this step).
                   tar xzf formulaic.tgz
                   formulaic="$(find . -type f -name formulaic | head -1)"
                   test -n "$formulaic" || { echo "formulaic binary not found in tarball" >&2; exit 1; }
@@ -185,7 +190,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: checkout
-              uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
               with:
                   persist-credentials: false
 

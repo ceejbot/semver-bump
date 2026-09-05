@@ -1,6 +1,6 @@
 //! Yet another semver bumping cli because all the other ones weren't quite perfect.
 //! This is a very simple wrapper around the semver crate that behaves
-//! exactly as a need a version-bumping tool to behave, and that is built
+//! exactly as I need a version-bumping tool to behave, and that is built
 //! and released in a way that makes it convenient to use in Github workflows.
 //! It handles incrementing or replacing pre-release and build identifiers as well
 //! as the usual major.minor.patch numbers.
@@ -74,21 +74,21 @@ fn v3_styles() -> Styles {
         .placeholder(AnsiColor::Green.on_default())
 }
 
-/// Increment the major version.
 fn major(previous: &Version) -> Version {
     Version::new(previous.major + 1, 0, 0)
 }
 
-/// Increment the minor version.
 fn minor(previous: &Version) -> Version {
     Version::new(previous.major, previous.minor + 1, 0)
 }
 
-/// Increment the patch version.
 fn patch(previous: &Version) -> Version {
     Version::new(previous.major, previous.minor, previous.patch + 1)
 }
 
+/// The two version segments that carry an identifier, so `increment` can
+/// rebuild either one from edited text. `create_new` fails when the text
+/// breaks the semver grammar for that segment.
 trait Incrementable: Display + Sized {
     fn create_new(input: String) -> anyhow::Result<Self>;
 }
@@ -105,37 +105,42 @@ impl Incrementable for BuildMetadata {
     }
 }
 
-/// Increment the passed-in separator plus maybe-number.
-fn increment_identifier(suffix: &str) -> anyhow::Result<String> {
+/// Bumps the tail of an identifier: `.4` becomes `.5`, a bare `4` stays bare as `5`,
+/// and a tail with no trailing number gets `.1` appended instead.
+fn increment_identifier(suffix: &str) -> String {
     let mut characters = suffix.chars().peekable();
 
     if let Some(maybe_sep) = characters.peek() {
         if SEPARATORS.contains(maybe_sep) {
             let separator = characters.next().expect("but we just checked this character!");
             let remainder: String = characters.collect();
-            // Check if remainder is numeric before parsing
             if let Ok(number) = remainder.parse::<u64>() {
-                return Ok(format!("{separator}{}", number + 1));
+                return format!("{separator}{}", number + 1);
             } else {
-                // Non-numeric after separator, append .1
-                return Ok(format!("{suffix}.1"));
+                return format!("{suffix}.1");
             }
         } else if maybe_sep.is_ascii_digit() {
-            // Check if entire suffix is numeric
             if let Ok(number) = suffix.parse::<u64>() {
-                // preserve lack of separator
-                return Ok(format!("{}", number + 1));
+                return format!("{}", number + 1);
             }
         }
     }
-    Ok(format!("{suffix}.1"))
+    format!("{suffix}.1")
 }
 
-/// Update the identifier for this version number. There are three cases plus an error:
-/// - No tag given but one already exists: increment the number at the end of the existing one.
-/// - A tag is given that the existing identifier already uses: increment its trailing number.
-/// - A brand-new tag is given: use it as-is if it ends in a digit, otherwise start it at `.1`.
-/// - No tag given and none exists: report an input error to the user.
+/// Guards against `alpha` matching the front of `alphabet.3`. The legal continuations
+/// after a tag are nothing, a separator, or the number itself in the `alpha1` form.
+fn at_tag_boundary(rest: &str) -> bool {
+    rest.chars()
+        .next()
+        .is_none_or(|c| SEPARATORS.contains(&c) || c.is_ascii_digit())
+}
+
+/// Applies `tag` to the existing identifier, in the order the branches below take them:
+/// - No tag and no existing identifier: an input error for the user.
+/// - No tag: increment the number at the end of the existing identifier.
+/// - A tag the existing identifier already uses: increment its trailing number.
+/// - A brand-new tag: use it as-is if it ends in a digit, otherwise start it at `.1`.
 fn increment<T: Incrementable>(input: &T, tag: &str) -> anyhow::Result<T> {
     let previous = input.to_string();
 
@@ -145,18 +150,15 @@ fn increment<T: Incrementable>(input: &T, tag: &str) -> anyhow::Result<T> {
                 "The current version does not have a prerelease suffix and you did not provide one."
             ));
         }
-        // No tag given: increment the number at the end of the existing identifier.
         if let Some(idx) = previous.rfind(SEPARATORS) {
             let (head, suffix) = previous.split_at(idx);
-            format!("{head}{}", increment_identifier(suffix)?)
+            format!("{head}{}", increment_identifier(suffix))
         } else {
-            increment_identifier(&previous)?
+            increment_identifier(&previous)
         }
-    } else if let Some(remainder) = previous.strip_prefix(tag) {
-        // Existing identifier already uses this tag: increment its trailing number.
-        format!("{tag}{}", increment_identifier(remainder)?)
+    } else if let Some(remainder) = previous.strip_prefix(tag).filter(|rest| at_tag_boundary(rest)) {
+        format!("{tag}{}", increment_identifier(remainder))
     } else {
-        // Brand-new tag: keep as-is if it already ends in a digit, else start at .1.
         if tag.chars().last().unwrap_or_default().is_ascii_digit() {
             tag.to_owned()
         } else {
@@ -167,17 +169,17 @@ fn increment<T: Incrementable>(input: &T, tag: &str) -> anyhow::Result<T> {
     T::create_new(identifier)
 }
 
-/// Replace or add a prerelease identifier, or increment the number at the
-/// end of an existing prerelease identifier.
+/// Bumps only the prerelease segment; the numbers and build metadata carry over
+/// untouched. See [`increment`] for how `tag` is applied.
 fn prerelease(previous: &Version, tag: &str) -> anyhow::Result<Version> {
     let mut next = Version::new(previous.major, previous.minor, previous.patch);
     let identifier = increment(&previous.pre, tag)?;
     next.pre = identifier;
-    next.build = previous.build.clone(); // Preserve build metadata
+    next.build = previous.build.clone();
     Ok(next)
 }
 
-/// This works just like prerelease, only it operates on the build segment.
+/// The counterpart of [`prerelease`] for the build segment; the prerelease carries over untouched.
 fn build(previous: &Version, tag: &str) -> anyhow::Result<Version> {
     let mut next = Version::new(previous.major, previous.minor, previous.patch);
     next.pre = previous.pre.clone();
@@ -305,7 +307,7 @@ mod tests {
         let input = Version::parse("1.0.0").expect("test data must be valid semver");
         prerelease(&input, "").expect_err("we expected an error from this call");
         prerelease(&input, "+illegal+").expect_err("we expected an error from this call");
-        // Non-numeric suffixes are now handled gracefully by appending .1
+        // A non-numeric tail gets `.1` appended rather than an error.
         let input = Version::parse("1.0.0-alpha.four").expect("test data must be valid semver");
         let next = prerelease(&input, "").expect("should handle non-numeric gracefully");
         assert_eq!(next.to_string(), "1.0.0-alpha.four.1");
@@ -432,6 +434,28 @@ mod tests {
         // Replacing with same identifier should increment
         let next = prerelease(&input, "alpha").expect("should increment same identifier");
         assert_eq!(next.to_string(), "1.0.0-alpha.6");
+    }
+
+    #[test]
+    fn tag_must_match_the_whole_identifier() {
+        // A tag that is merely a prefix of the existing identifier is a brand-new tag.
+        let input = Version::parse("1.0.0-alphabet.3").expect("valid semver");
+        let next = prerelease(&input, "alpha").expect("should treat alpha as a new tag");
+        assert_eq!(next.to_string(), "1.0.0-alpha.1");
+
+        let input = Version::parse("1.0.0-alpha.1").expect("valid semver");
+        let next = prerelease(&input, "alph").expect("should treat alph as a new tag");
+        assert_eq!(next.to_string(), "1.0.0-alph.1");
+
+        // The no-separator form still counts as the same tag.
+        let input = Version::parse("1.0.0-alpha1").expect("valid semver");
+        let next = prerelease(&input, "alpha").expect("should increment alpha1");
+        assert_eq!(next.to_string(), "1.0.0-alpha2");
+
+        // Same rule for build metadata.
+        let input = Version::parse("1.0.0+buildx.7").expect("valid semver");
+        let next = build(&input, "build").expect("should treat build as a new tag");
+        assert_eq!(next.to_string(), "1.0.0+build.1");
     }
 
     #[test]
